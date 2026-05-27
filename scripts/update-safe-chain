@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+package_file="$repo_root/pkgs/safe-chain/default.nix"
+package_name="@aikidosec/safe-chain"
+
+latest_version="$(npm view "$package_name" version --json | jq -r '.')"
+current_version="$(sed -n 's/.*version = "\([^"]*\)";.*/\1/p' "$package_file" | head -n1)"
+
+if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
+  echo "Could not resolve latest $package_name version" >&2
+  exit 1
+fi
+
+if [[ "$latest_version" == "$current_version" ]]; then
+  echo "safe-chain is already up to date at $current_version"
+  exit 0
+fi
+
+echo "Updating safe-chain from $current_version to $latest_version"
+
+src_hash="$(
+  nix store prefetch-file \
+    --hash-type sha256 \
+    --json \
+    "https://registry.npmjs.org/@aikidosec/safe-chain/-/safe-chain-${latest_version}.tgz" \
+    | jq -r '.hash'
+)"
+
+perl -0pi -e 's/version = "[^"]+";/version = "'"$latest_version"'";/' "$package_file"
+perl -0pi -e 's|hash = "sha256-[^"]+";|hash = "'"$src_hash"'";|' "$package_file"
+perl -0pi -e 's|npmDepsHash = "sha256-[^"]+";|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";|' "$package_file"
+
+set +e
+build_output="$(nix build "$repo_root#safe-chain" --no-link --print-build-logs 2>&1)"
+build_status=$?
+set -e
+
+if [[ "$build_status" -eq 0 ]]; then
+  echo "Unexpectedly built with a fake npmDepsHash" >&2
+  exit 1
+fi
+
+npm_deps_hash="$(printf '%s\n' "$build_output" | sed -n 's/.*got:[[:space:]]*\(sha256-[A-Za-z0-9+\/=]*\).*/\1/p' | tail -n1)"
+if [[ -z "$npm_deps_hash" ]]; then
+  printf '%s\n' "$build_output" >&2
+  echo "Could not extract npmDepsHash from failed build" >&2
+  exit 1
+fi
+
+perl -0pi -e 's|npmDepsHash = "sha256-[^"]+";|npmDepsHash = "'"$npm_deps_hash"'";|' "$package_file"
+
+nix build "$repo_root#safe-chain" --no-link --print-build-logs
+nix flake check "$repo_root" --print-build-logs
+
+echo "Updated safe-chain to $latest_version"
