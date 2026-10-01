@@ -7,16 +7,16 @@
 
 buildNpmPackage (finalAttrs: {
   pname = "safe-chain";
-  version = "1.5.3";
+  version = "1.5.24";
 
   nodejs = nodejs_24;
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@aikidosec/safe-chain/-/safe-chain-${finalAttrs.version}.tgz";
-    hash = "sha256-KrH3xFZRkfIKq0BcsOgcfvW1vFTGcUaAUglhNV0tt/8=";
+    hash = "sha256-eS9hTguO9zH7zBDncCmHHErbtjWaY9MAnK+vKUkqCLw=";
   };
 
-  npmDepsHash = "sha256-ickv/3c3ZYVtbsbdTG9ocfI4gNPC36uvIu6PgRgUpfI=";
+  npmDepsHash = "sha256-HHI4pZkdF78qVstAiqnCYe7L4i6Peqqo0YVTwwkFOEA=";
   npmDepsFetcherVersion = 2;
   npmInstallFlags = [ "--omit=dev" ];
 
